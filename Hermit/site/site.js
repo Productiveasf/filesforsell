@@ -365,7 +365,8 @@ form.addEventListener("submit", async (e) => {
     if (antiDebug.checked) fd.append("anti_debug", "1");
     fd.append("stein_best", "1");
   }
-  fd.append("banner", document.getElementById("banner").value);
+  const bannerEl = document.getElementById("banner");
+  if (bannerEl) fd.append("banner", bannerEl.value);
 
   let endpoint = "/api/download";
   if (delivery === "bot") {
