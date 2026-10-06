@@ -97,7 +97,7 @@ function getPlatforms() {
 }
 function protectionLayers() {
   if (!obfuscate.checked) return [];
-  const ids = ["antiSite", "antiDebug"];
+  const ids = ["stringObf", "antiSite", "antiDebug"];
   return ids
     .map(id => document.getElementById(id))
     .filter(el => el && el.checked)
@@ -356,7 +356,7 @@ form.addEventListener("submit", async (e) => {
   fd.append("c_level_obf", "0");
   if (obfuscate.checked) {
     fd.append("obfuscate", "1");
-    fd.append("strings", "None");
+    fd.append("strings", document.getElementById("stringObf")?.checked ? "low" : "None");
     fd.append("name_prefix", "l");
     fd.append("min_length", "3");
     fd.append("max_length", "7");
