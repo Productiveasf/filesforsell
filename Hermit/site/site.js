@@ -10,6 +10,7 @@ const checkResult = document.getElementById("checkResult");
 const submitBtn = document.getElementById("submitBtn");
 const logSection = document.getElementById("log");
 const logStatus = document.getElementById("logStatus");
+const buildElapsed = document.getElementById("buildElapsed");
 const logLines = document.getElementById("logLines");
 const results = document.getElementById("results");
 
@@ -21,72 +22,7 @@ const PLATFORM_LABELS = {
 };
 
 /* ── Ambient dot field (crystallizes to ember near cursor) ── */
-(function bgField() {
-  const canvas = document.getElementById("bg");
-  const glow = document.getElementById("glow");
-  if (!canvas) return;
-  const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  const touch = matchMedia("(hover: none), (pointer: coarse)").matches;
-  const ctx = canvas.getContext("2d");
-  const dpr = Math.min(window.devicePixelRatio || 1, 2);
-  let w, h, dots = [];
-  const spacing = touch ? 44 : 36;
 
-  function resize() {
-    w = window.innerWidth;
-    h = window.innerHeight;
-    canvas.width = w * dpr;
-    canvas.height = h * dpr;
-    canvas.style.width = w + "px";
-    canvas.style.height = h + "px";
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    dots = [];
-    for (let y = spacing / 2; y < h + spacing; y += spacing) {
-      for (let x = spacing / 2; x < w + spacing; x += spacing) {
-        dots.push({ x, y, base: x + y });
-      }
-    }
-  }
-
-  let mx = w / 2, my = h / 2;
-  if (touch) {
-    window.addEventListener("scroll", () => {
-      my = (window.scrollY % h);
-      if (glow) glow.style.setProperty("--gy", (my / h * 100) + "%");
-    }, { passive: true });
-  } else {
-    window.addEventListener("pointermove", (e) => {
-      mx = e.clientX; my = e.clientY;
-      if (glow) {
-        glow.style.setProperty("--gx", (mx / window.innerWidth * 100) + "%");
-        glow.style.setProperty("--gy", (my / window.innerHeight * 100) + "%");
-      }
-    });
-  }
-
-  function draw(t) {
-    ctx.clearRect(0, 0, w, h);
-    for (const d of dots) {
-      const dx = d.x - mx, dy = d.y - my;
-      const dist = Math.sqrt(dx * dx + dy * dy);
-      const near = touch ? 0 : Math.max(0, 1 - dist / 210);
-      const drift = reduce ? 0 : Math.sin(t / 2800 + d.base) * 0.6;
-      const r = 1 + near * 1.7;
-      ctx.beginPath();
-      ctx.arc(d.x, d.y + drift, r, 0, Math.PI * 2);
-      ctx.fillStyle = near > 0.05
-        ? `rgba(232,161,60,${0.10 + near * 0.4})`
-        : "rgba(237,239,243,0.045)";
-      ctx.fill();
-    }
-    if (!reduce) requestAnimationFrame(draw);
-  }
-
-  window.addEventListener("resize", resize);
-  resize();
-  if (reduce) draw(0);
-  else requestAnimationFrame(draw);
-})();
 
 /* ── State readers ── */
 function getVersions() {
@@ -97,11 +33,11 @@ function getPlatforms() {
 }
 function protectionLayers() {
   if (!obfuscate.checked) return [];
-  const ids = ["stringObf", "antiSite", "antiDebug"];
-  return ids
+  const ids = ["antiSite", "antiDebug"];
+  return ["String obfuscation", ...ids
     .map(id => document.getElementById(id))
     .filter(el => el && el.checked)
-    .map(el => el.nextElementSibling.querySelector("b")?.textContent || "");
+    .map(el => el.closest(".toggle").querySelector(".toggle-copy b")?.textContent || "")];
 }
 
 /* ── Topbar matrix ── */
@@ -111,6 +47,7 @@ const matrixGrid = document.getElementById("matrixGrid");
 function updateMatrix() {
   const n = getVersions().length * getPlatforms().length;
   matrixCount.textContent = n;
+  document.querySelector(".matrix-label").textContent = n === 1 ? "build target" : "build targets";
   const cells = Math.min(Math.max(n, 0), 16);
   matrixGrid.innerHTML = "";
   for (let i = 0; i < 16; i++) {
@@ -132,7 +69,7 @@ function updatePipeline() {
   const delivery = deliveryMode.querySelector("input:checked").value;
 
   setStage(document.getElementById("pipeSource"), selectedFiles.length > 0,
-    selectedFiles.length ? `${selectedFiles.length} file${selectedFiles.length > 1 ? "s" : ""}` : "no files");
+    selectedFiles.length ? "File selected" : "No file");
   setStage(document.getElementById("pipeObf"), obfuscate.checked, obfuscate.checked ? "on" : "off");
   setStage(document.getElementById("pipeHarden"), layers > 0,
     `${layers} layer${layers === 1 ? "" : "s"}`);
@@ -163,8 +100,8 @@ function updateSummary() {
   sumCount.textContent = n;
 
   sumFiles.textContent = selectedFiles.length
-    ? `${selectedFiles.length} file${selectedFiles.length > 1 ? "s" : ""}`
-    : "No files yet";
+    ? selectedFiles[0].name
+    : "No file selected";
   sumFiles.className = selectedFiles.length ? "on-live" : "";
 
   if (obfuscate.checked) {
@@ -195,7 +132,7 @@ function updateSummary() {
 
   if (!selectedFiles.length) sumNote.textContent = "Choose your source to begin.";
   else if (n === 0) sumNote.textContent = "Pick at least one version and platform.";
-  else sumNote.textContent = `Ready to forge ${n} artifact${n === 1 ? "" : "s"}.`;
+  else sumNote.textContent = `Ready to build ${n} output${n === 1 ? "" : "s"}.`;
 }
 
 function refreshAll() {
@@ -217,16 +154,22 @@ function renderFiles() {
   }
   drop.classList.toggle("loaded", selectedFiles.length > 0);
   dropText.innerHTML = selectedFiles.length
-    ? `${selectedFiles.length} file(s) selected — tap to change`
-    : "Tap to choose <code>.py</code> files, or drag &amp; drop";
+    ? "Source selected. Click to change."
+    : "Choose your Python file";
   refreshAll();
 }
 
 drop.addEventListener("click", (e) => {
   if (e.target !== fileInput) fileInput.click();
 });
+drop.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" || e.key === " ") {
+    e.preventDefault();
+    fileInput.click();
+  }
+});
 fileInput.addEventListener("change", () => {
-  selectedFiles = [...fileInput.files].filter(f => f.name.toLowerCase().endsWith(".py"));
+  selectedFiles = [...fileInput.files].filter(f => f.name.toLowerCase().endsWith(".py")).slice(0, 1);
   renderFiles();
 });
 ["dragover", "dragleave", "drop"].forEach(evt => {
@@ -238,7 +181,7 @@ fileInput.addEventListener("change", () => {
 drop.addEventListener("drop", (e) => {
   const dropped = [...e.dataTransfer.files].filter(f => f.name.toLowerCase().endsWith(".py"));
   if (dropped.length) {
-    selectedFiles = dropped;
+    selectedFiles = dropped.slice(0, 1);
     renderFiles();
   }
 });
@@ -260,7 +203,10 @@ const obfWarn = document.getElementById("obfWarn");
 const obfOptions = document.getElementById("obfOptions");
 function syncObfOptions() {
   obfWarn.classList.toggle("hidden", obfuscate.checked);
-  obfOptions.classList.toggle("hidden", !obfuscate.checked);
+  obfOptions.classList.remove("hidden");
+  obfOptions.classList.toggle("is-disabled", !obfuscate.checked);
+  antiSite.disabled = !obfuscate.checked;
+  antiDebug.disabled = !obfuscate.checked;
 }
 obfuscate.addEventListener("change", syncObfOptions);
 syncObfOptions();
@@ -312,14 +258,18 @@ function addResultLink(url, name) {
 }
 
 let timerId = null;
+let buildStartedAt = 0;
 function fmtElapsed(ms) {
   const s = Math.floor(ms / 1000);
   return String(Math.floor(s / 60)).padStart(2, "0") + ":" + String(s % 60).padStart(2, "0");
 }
 function startTimer() {
-  const t0 = Date.now();
   stopTimer();
-  const tick = () => setStatus(`building · ${fmtElapsed(Date.now() - t0)}`, "run");
+  buildStartedAt = performance.now();
+  const tick = () => {
+    setStatus("Building", "run");
+    buildElapsed.textContent = `Elapsed ${fmtElapsed(performance.now() - buildStartedAt)}`;
+  };
   tick();
   timerId = setInterval(tick, 1000);
 }
@@ -336,7 +286,7 @@ function setStatus(text, cls) {
 form.addEventListener("submit", async (e) => {
   e.preventDefault();
   if (!selectedFiles.length) {
-    alert("Choose at least one .py file");
+    alert("Choose a .py file");
     return;
   }
   const versions = getVersions();
@@ -348,15 +298,15 @@ form.addEventListener("submit", async (e) => {
   const delivery = deliveryMode.querySelector("input:checked").value;
 
   const fd = new FormData();
-  for (const f of selectedFiles) fd.append("files", f);
+  fd.append("files", selectedFiles[0]);
   fd.append("versions", versions.join(","));
   fd.append("platforms", platforms.join(","));
   fd.append("bundle_mode", bundleMode);
 
-  fd.append("c_level_obf", "0");
+  fd.append("c_level_obf", "1");
   if (obfuscate.checked) {
     fd.append("obfuscate", "1");
-    fd.append("strings", document.getElementById("stringObf")?.checked ? "low" : "None");
+    fd.append("strings", selectedFiles[0].size > 20 * 1024 ? "low" : "high");
     fd.append("name_prefix", "l");
     fd.append("min_length", "3");
     fd.append("max_length", "7");
@@ -425,10 +375,13 @@ form.addEventListener("submit", async (e) => {
     addLine("Connection lost: " + err.message, "err");
     failed = true;
   } finally {
+    const duration = performance.now() - buildStartedAt;
     stopTimer();
     submitBtn.disabled = false;
     submitBtn.textContent = "Run build";
-    setStatus(failed ? "failed" : "sealed", failed ? "fail" : "done");
+    setStatus(failed ? "Failed" : "Complete", failed ? "fail" : "done");
+    const elapsed = duration < 60000 ? `${(duration / 1000).toFixed(1)}s` : fmtElapsed(duration);
+    buildElapsed.textContent = `${failed ? "Stopped after" : "Completed in"} ${elapsed}`;
   }
 });
 
